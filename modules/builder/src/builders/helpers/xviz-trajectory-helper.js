@@ -14,6 +14,7 @@
 
 import {_Pose as Pose} from 'math.gl';
 import * as turf from '@turf/turf';
+import {addMetersToLngLat} from 'viewport-mercator-project';
 
 /**
  * Given vertices and a base pose, transform the vertices to `basePose` relative coordinates
@@ -55,7 +56,7 @@ export function getPoseTrajectory({poses, startFrame, endFrame}) {
  *
  * @param from {Object} {longitude, latitude, pitch, roll, yaw}
  * @param to {Object} {longitude, latitude, pitch, roll, yaw}
- * @returns {Object} tranformation matrix that converts 'from' relative coordinates into 'to' relative coordinates
+ * @returns {Object} transformation matrix that converts 'from' relative coordinates into 'to' relative coordinates
  */
 export function getGeospatialToPoseTransform(from, to) {
   const toPose = new Pose({
@@ -108,7 +109,7 @@ export function getObjectTrajectory({
     const step = motions[i];
     const currVehiclePose = poseFrames[startFrame + i].pose;
 
-    const [x, y] = getGeospatialVector(startVehiclePose, currVehiclePose, startVehiclePose.yaw);
+    const [x, y, z] = getGeospatialVector(startVehiclePose, currVehiclePose, startVehiclePose.yaw);
 
     const transformMatrix = new Pose(currVehiclePose).getTransformationMatrixFromPose(
       new Pose(startVehiclePose)
@@ -117,7 +118,7 @@ export function getObjectTrajectory({
     // objects in curr frame are meters offset based on current vehicle pose
     // need to convert to the coordinate system of the start vehicle pose
     const p = transformMatrix.transformVector([step.x, step.y, step.z]);
-    vertices.push([p[0] + x, p[1] + y, p[2]]);
+    vertices.push([p[0] + x, p[1] + y, p[2] + z]);
   }
 
   return vertices;
@@ -132,8 +133,16 @@ export function getObjectTrajectory({
  * @returns {Array} Vector [x, y] in meters
  */
 export function getGeospatialVector(from, to, heading = 0) {
-  const fromCoord = turf.point([from.longitude, from.latitude]);
-  const toCoord = turf.point([to.longitude, to.latitude]);
+  const fromCoord = addMetersToLngLat(
+    [from.longitude, from.latitude, from.altitude],
+    [from.x || 0, from.y || 0, from.z || 0]
+  );
+
+  const toCoord = addMetersToLngLat(
+    [to.longitude, to.latitude, to.altitude],
+    [to.x || 0, to.y || 0, to.z || 0]
+  );
+
   const distInMeters = turf.distance(fromCoord, toCoord, {units: 'meters'});
 
   // Bearing is degrees from north, positive is clockwise
@@ -143,7 +152,9 @@ export function getGeospatialVector(from, to, heading = 0) {
   const relativeBearing = turf.degreesToRadians(90 - bearing);
   const radianDiff = relativeBearing - heading;
 
-  return [distInMeters * Math.cos(radianDiff), distInMeters * Math.sin(radianDiff)];
+  const diffZ = toCoord[2] - fromCoord[2];
+
+  return [distInMeters * Math.cos(radianDiff), distInMeters * Math.sin(radianDiff), diffZ];
 }
 
 function getFrameObjects(frames, frameNumber) {
