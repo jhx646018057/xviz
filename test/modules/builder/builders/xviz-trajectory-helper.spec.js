@@ -16,8 +16,6 @@
 import test from 'tape-catch';
 import {getGeospatialVector} from '@xviz/builder/builders/helpers/xviz-trajectory-helper';
 
-import * as turf from '@turf/turf';
-
 function almostEqual(a, b, tolerance = 0.00001) {
   return Math.abs(a - b) < tolerance;
 }
@@ -40,33 +38,12 @@ test('getGeospatialVector# west ~1000m', t => {
   t.end();
 });
 
-test('getGeospatialVector# west ~1000m with heading -45deg', t => {
-  const a = {longitude: -75.0, latitude: 40.0};
-  const b = {longitude: -75.01174, latitude: 40};
-  const result = getGeospatialVector(a, b, turf.degreesToRadians(-45));
-
-  const expected = [-707.16577871, -707.07264, 0];
-  t.ok(equals(result, expected), 'Vector is correct');
-  t.end();
-});
-
 test('getGeospatialVector# difference with -37.45deg bearing, 243.72336m', t => {
   const a = {longitude: -75.0, latitude: 40.0};
   const b = {longitude: -75.00174, latitude: 40.00174};
   const result = getGeospatialVector(a, b);
 
   const expected = [-148.2100726, 193.4808862, 0];
-  t.ok(equals(result, expected), 'Vector is correct');
-  t.end();
-});
-
-test('getGeospatialVector# difference with -37.45 bearing, 243.72336m, heading matches bearing', t => {
-  const a = {longitude: -75.0, latitude: 40.0};
-  const b = {longitude: -75.00174, latitude: 40.00174};
-  const result = getGeospatialVector(a, b, turf.degreesToRadians(90 + 37.45));
-
-  // Since heading matches bearing, this makes the vector near 0 for y
-  const expected = [243.72336, 0.011944, 0];
   t.ok(equals(result, expected), 'Vector is correct');
   t.end();
 });
