@@ -48,10 +48,11 @@ export function getPoseTrajectory({poses, startFrame, endFrame}) {
   }
 
   const startPose = poses[startFrame].pose;
-  const transformMatrix = new Pose(startPose).getTransformationMatrix();
+  // world coordinate system to startPose coordinate system
+  const transformMatrix = new Pose(startPose).getTransformationMatrix().invert();
 
   return positions.map(currPose => {
-    // offset vector in world coordinate
+    // offset vector in world coordinate system
     const offset = getGeospatialVector(startPose, currPose);
 
     // transform currPose to startPose coordinate system
@@ -63,7 +64,7 @@ export function getPoseTrajectory({poses, startFrame, endFrame}) {
 
 /**
  * Return transform matrix that can be used to transform
- * data in futurePose into the currentPose reference frame
+ * data in `from` pose coordinate system into the `to` pose coordinate system
  *
  * @param from {Object} {longitude, latitude, pitch, roll, yaw}
  * @param to {Object} {longitude, latitude, pitch, roll, yaw}
@@ -72,18 +73,29 @@ export function getPoseTrajectory({poses, startFrame, endFrame}) {
 export function getGeospatialToPoseTransform(from, to) {
   // Since 'to' is the target, get the vector from 'to -> from'
   // and use that to set the position of 'from Pose'
-  const v = getGeospatialVector(to, from);
+  const offset = getGeospatialVector(from, to);
 
   const fromPose = new Pose({
-    x: v[0],
-    y: v[1],
-    z: v[2],
+    x: 0,
+    y: 0,
+    z: 0,
     pitch: from.pitch,
     roll: from.roll,
     yaw: from.yaw
   });
 
-  return new Pose(to).getTransformationMatrixToPose(fromPose);
+  const toPose = new Pose({
+    x: offset[0],
+    y: offset[1],
+    z: offset[2],
+    pitch: to.pitch,
+    roll: to.roll,
+    yaw: to.yaw
+  });
+
+  // there is a bug in math.gl https://github.com/uber-web/math.gl/issues/33
+  // pose.getTransformationMatrixFromPose and pose.getTransformationMatrixFromPose are flipped
+  return fromPose.getTransformationMatrixFromPose(toPose);
 }
 
 /**
@@ -112,10 +124,11 @@ export function getObjectTrajectory({
 
     const currVehiclePose = poseFrames[startFrame + i].pose;
 
+    // matrix to convert data from currVehiclePose relative to startVehiclePose relative.
     const transformMatrix = getGeospatialToPoseTransform(currVehiclePose, startVehiclePose);
 
-    // objects in curr frame are meters offset based on current vehicle pose
-    // need to convert to the coordinate system of the start vehicle pose
+    // objects in curr frame are meters offset based on currVehiclePose
+    // need to convert to the coordinate system of the startVehiclePose
     const p = transformMatrix.transformVector([step.x, step.y, step.z]);
     vertices.push([p.x, p.y, p.z]);
   }
@@ -125,7 +138,7 @@ export function getObjectTrajectory({
 
 /* eslint-disable complexity */
 /**
- * Get the meter vector from geospatial coordinates in world coordinate system
+ * Get the meter vector from Geospatial coordinates in world coordinate system
  *
  * @param from {Object} {longitude, latitude, altitude, x, y, z}
  * @param to {Object} {longitude, latitude, altitude, x, y, z}
